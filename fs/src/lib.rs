@@ -15,9 +15,6 @@ use {
 };
 
 pub const BLOCK_SIZE: usize = 1024;
-pub const DATA_START_BLOCK: u32 = {
-    65536
-};
 
 /// The block device driver.
 pub trait BlockDevice {
@@ -64,8 +61,8 @@ impl BlockDevice for FileBlockDevice {
 
 ///
 #[cfg(feature = "std")]
-pub fn init_block_device(file_path: &str) -> FileBlockDevice {
-    let mut file = OpenOptions::new()
+pub fn init_block_device(file_path: &str) -> Result<FileBlockDevice, &'static str> {
+    let file = OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
@@ -73,7 +70,7 @@ pub fn init_block_device(file_path: &str) -> FileBlockDevice {
         .map_err(|_| "Failed to open file")?;
 
     // Return the block device driver.
-    FileBlockDevice(file)
+    Ok(FileBlockDevice(file))
 }
 
 /// The basic structure of the whole file system.
@@ -101,10 +98,16 @@ impl<B: BlockDevice> FileSystem<B> {
     /// * `Self` - The mounted file system.
     pub fn mount(bd: B, fs_type: definition::FsType) -> Self {
         let super_block = definition::SuperBlock::new(fs_type);
+        let data_start_block = if super_block.fs_type == definition::FsType::Standard {
+            65536
+        } else {
+            1024
+        };
+        
         Self {
             block_device: bd,
             super_block: super_block,
-            data_start_block: 1024, // Will dynamic calculate in the future.
+            data_start_block,
         }
     }
 
@@ -319,13 +322,17 @@ pub fn convert_name(name_src: &[u8]) -> [u8; 256] {
 
 /// Decide the file system type through the file size.
 #[cfg(feature = "std")]
-pub fn check_fs_type(file: &std::fs::File) -> Result<definition::FsType, &'static str> {
-    let file_size = file.metadata()?.len();
-    if get_device_size(&args.path)? > 64 * 1024 * 1024 {
-        65536
+pub fn check_fs_type(file_path: &str) -> Result<definition::FsType, &'static str> {
+    let file = OpenOptions::new()
+        .read(true)
+        .open(file_path)
+        .map_err(|_| "Failed to open file")?;
+    let file_size = file.metadata().map_err(|_| "Failed to get metadata")?.len();
+    if file_size > 64 * 1024 * 1024 {
+        Ok(definition::FsType::Standard)
     } else {
-        1024
-    };
+        Ok(definition::FsType::Minimum)
+    }
 }
 
 /// Get the device size in bytes.

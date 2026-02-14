@@ -1,10 +1,10 @@
 //! The tool to create the proka file system.
 use clap::Parser;
 use proka_fs::definition::{DirEntry, Inode, SuperBlock};
-use proka_fs::{BlockDevice, convert_name};
+use proka_fs::{BlockDevice, convert_name, init_block_device, get_device_size};
 use proka_fs::check_fs_type;
 use std::io::{Seek, SeekFrom, Read, Write};
-use std::fs::{File, OpenOptions};
+use std::fs::File;
 use colored::Colorize;
 
 const BLOCK_SIZE: usize = 1024;
@@ -44,20 +44,12 @@ fn main() -> Result<(), &'static str> {
     // Parse the CLI args.
     let args = Args::parse();
     // Open the file.
-    let file = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .open(&args.path)
-        .map_err(|_| "Failed to open file")?;
-    
-    // Create the block device.
-    let mut bd = FileBlockDevice(file);
+    let mut bd = init_block_device(&args.path)?;
 
     // Decide the data start block
     // If size > 64MB, the data start block is 65536, which can store max 2,097,120 files.
     // otherwise, the data start block is 1024, but only 32768 files.
-    if check_fs_type(&mut bd)? == proka_fs::definition::FsType::Standard {
+    let data_start_block = if check_fs_type(&args.path)? == proka_fs::definition::FsType::Standard {
         println!("mkpkfs: [INFO] Detected the device size is {}MB", get_device_size(&args.path)? / 1024 / 1024);
         println!("mkpkfs: [INFO] Will use the Standard mode.");
         65536
@@ -69,7 +61,7 @@ fn main() -> Result<(), &'static str> {
 
     /* Stage 1: Initialize the super block */
     println!("mkpkfs: [INFO] Initialize the super block...");
-    let super_block = SuperBlock::new(check_fs_type(&mut bd)?);
+    let super_block = SuperBlock::new(check_fs_type(&args.path)?);
     bd.write_block(0, 0, super_block.as_bytes())?;
 
     /* Stage 2: Initialize the root inode */

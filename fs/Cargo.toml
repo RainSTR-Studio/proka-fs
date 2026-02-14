@@ -1,0 +1,10 @@
+[package]
+name = "proka-fs"
+version = "0.1.1"
+edition = "2024"
+
+[dependencies]
+
+[features]
+default = []
+std = []
