@@ -1,0 +1,41 @@
+name: Build
+
+on:
+  push:
+    branches: [ "main" ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Build Release
+        run: cargo build --release
+
+      - name: Pack Binary
+        run: |
+          cd target/release
+          VERSION = ${{ github.ref_name }}
+          tar -czvf ../../pkfs-utils-$VERSION.tar.gz mkpkfs
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: pkfs-utils-*.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
