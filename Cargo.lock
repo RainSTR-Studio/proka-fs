@@ -126,6 +126,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
+name = "pkfs-utils"
+version = "0.1.2"
+dependencies = [
+ "clap",
+ "colored",
+ "proka-fs",
+]
+
+[[package]]
 name = "proc-macro2"
 version = "1.0.106"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -137,15 +146,6 @@ dependencies = [
 [[package]]
 name = "proka-fs"
 version = "0.1.2"
-
-[[package]]
-name = "proka-fs-utils"
-version = "0.1.2"
-dependencies = [
- "clap",
- "colored",
- "proka-fs",
-]
 
 [[package]]
 name = "quote"
