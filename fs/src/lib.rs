@@ -10,8 +10,8 @@ use alloc::vec::Vec;
 
 #[cfg(feature = "std")]
 use {
-    std::io::{Seek, SeekFrom, Read, Write},
     std::fs::{File, OpenOptions},
+    std::io::{Read, Seek, SeekFrom, Write},
 };
 
 pub const BLOCK_SIZE: usize = 1024;
@@ -46,14 +46,25 @@ pub struct FileBlockDevice(File);
 
 #[cfg(feature = "std")]
 impl BlockDevice for FileBlockDevice {
-    fn read_block(&mut self, block_num: u32, offset: u32, buf: &mut [u8]) -> Result<(), &'static str> {
-        self.0.seek(SeekFrom::Start(block_num as u64 * BLOCK_SIZE as u64 + offset as u64))
+    fn read_block(
+        &mut self,
+        block_num: u32,
+        offset: u32,
+        buf: &mut [u8],
+    ) -> Result<(), &'static str> {
+        self.0
+            .seek(SeekFrom::Start(
+                block_num as u64 * BLOCK_SIZE as u64 + offset as u64,
+            ))
             .map_err(|_| "Failed to seek to block")?;
         self.0.read_exact(buf).map_err(|_| "Failed to read block")
     }
 
     fn write_block(&mut self, block_num: u32, offset: u32, buf: &[u8]) -> Result<(), &'static str> {
-        self.0.seek(SeekFrom::Start(block_num as u64 * BLOCK_SIZE as u64 + offset as u64))
+        self.0
+            .seek(SeekFrom::Start(
+                block_num as u64 * BLOCK_SIZE as u64 + offset as u64,
+            ))
             .map_err(|_| "Failed to seek to block")?;
         self.0.write_all(buf).map_err(|_| "Failed to write block")
     }
@@ -103,7 +114,7 @@ impl<B: BlockDevice> FileSystem<B> {
         } else {
             1024
         };
-        
+
         Self {
             block_device: bd,
             super_block: super_block,
@@ -185,17 +196,24 @@ impl<B: BlockDevice> FileSystem<B> {
         // Second, read the inode from the block device.
         let mut buf = [0u8; core::mem::size_of::<Inode>()];
         let (block_idx, offset) = Inode::locate(inode_id, &self.super_block);
-        if let Err(_) = self.block_device
-            .read_block(block_idx as u32, offset as u32, &mut buf) {
+        if let Err(_) = self
+            .block_device
+            .read_block(block_idx as u32, offset as u32, &mut buf)
+        {
             return None;
         }
         let inode = Inode::from_bytes(&buf)?;
         Some(*inode)
     }
 
-    fn add_dir_entry(&mut self, parent_inode_id: u32, name: &str, inode_id: u32) -> Result<(), &'static str> {
+    fn add_dir_entry(
+        &mut self,
+        parent_inode_id: u32,
+        name: &str,
+        inode_id: u32,
+    ) -> Result<(), &'static str> {
         // 1. Check is the parent directory exists.
-        let mut  parent_inode = if let Some(inode) = self.get_inode(parent_inode_id) {
+        let mut parent_inode = if let Some(inode) = self.get_inode(parent_inode_id) {
             inode
         } else {
             return Err("Parent inode not found");
@@ -204,7 +222,8 @@ impl<B: BlockDevice> FileSystem<B> {
         // 2. Calculate which block and offset the dir entry should be written.
         parent_inode.file_length += 1;
         let data_block_head_idx = parent_inode.head_block as usize;
-        let data_offset = parent_inode.file_length as usize * core::mem::size_of::<definition::DirEntry>();
+        let data_offset =
+            parent_inode.file_length as usize * core::mem::size_of::<definition::DirEntry>();
 
         // 3. Create a dir entry.
         let name = convert_name(name.as_bytes());
@@ -214,8 +233,11 @@ impl<B: BlockDevice> FileSystem<B> {
         };
 
         // 4. Write the dir entry to the block device.
-        self.block_device
-            .write_block(data_block_head_idx as u32, data_offset as u32, &dir_entry.as_bytes())?;
+        self.block_device.write_block(
+            data_block_head_idx as u32,
+            data_offset as u32,
+            &dir_entry.as_bytes(),
+        )?;
 
         // 5. Update the parent inode.
         let (block_idx, offset) = Inode::locate(parent_inode_id, &self.super_block);

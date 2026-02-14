@@ -1,5 +1,5 @@
-
 /// The entry point of directory.
+#[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct DirEntry {
     /// The inode number of the directory.
@@ -19,13 +19,19 @@ impl DirEntry {
 
     pub fn as_bytes(&self) -> &[u8] {
         unsafe {
-            core::slice::from_raw_parts(self as *const Self as *const u8, core::mem::size_of::<Self>())
+            core::slice::from_raw_parts(
+                self as *const Self as *const u8,
+                core::mem::size_of::<Self>(),
+            )
         }
     }
 
     pub fn as_mut_bytes(&mut self) -> &mut [u8] {
         unsafe {
-            core::slice::from_raw_parts_mut(self as *mut Self as *mut u8, core::mem::size_of::<Self>())
+            core::slice::from_raw_parts_mut(
+                self as *mut Self as *mut u8,
+                core::mem::size_of::<Self>(),
+            )
         }
     }
 }

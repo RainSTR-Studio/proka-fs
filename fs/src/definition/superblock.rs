@@ -3,12 +3,12 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum FsType {
     /// The standard system type, which can store about 2097152 files.
-    /// 
+    ///
     /// Uses in > 64MB disk.
     Standard = 0,
 
     /// The Minimum file system type, which can *only* store about 32768 files.
-    /// 
+    ///
     /// Uses in <= 64MB disk.
     Minimum = 1,
 }
@@ -30,32 +30,38 @@ pub struct SuperBlock {
     pub data_start_block: u32,
 
     /// The bitmap which indicates whether each block is used.
-    pub block_bitmap: [u8; 128],    // 128 * 8 = 1024 = 1 block
+    pub block_bitmap: [u8; 128], // 128 * 8 = 1024 = 1 block
 
     /// The bitmap which indicates whether each inode is used.
-    pub inode_bitmap: [u8; 128],    // 128 * 8 = 1024 = 1 block
+    pub inode_bitmap: [u8; 128], // 128 * 8 = 1024 = 1 block
 }
 
 impl SuperBlock {
     /// Get the super block as a byte slice.
-    /// 
+    ///
     /// # Returns
-    /// 
+    ///
     /// * `&[u8]` - The super block as a byte slice.
     pub fn as_bytes(&self) -> &[u8] {
         unsafe {
-            core::slice::from_raw_parts(self as *const Self as *const u8, core::mem::size_of::<Self>())
+            core::slice::from_raw_parts(
+                self as *const Self as *const u8,
+                core::mem::size_of::<Self>(),
+            )
         }
     }
 
     /// Get the super block as a mutable byte slice.
-    /// 
+    ///
     /// # Returns
-    /// 
+    ///
     /// * `&mut [u8]` - The super block as a mutable byte slice.
     pub fn as_mut_bytes(&mut self) -> &mut [u8] {
         unsafe {
-            core::slice::from_raw_parts_mut(self as *mut Self as *mut u8, core::mem::size_of::<Self>())
+            core::slice::from_raw_parts_mut(
+                self as *mut Self as *mut u8,
+                core::mem::size_of::<Self>(),
+            )
         }
     }
 }

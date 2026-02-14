@@ -1,11 +1,11 @@
 //! The tool to create the proka file system.
 use clap::Parser;
-use proka_fs::definition::{DirEntry, Inode, SuperBlock};
-use proka_fs::{BlockDevice, convert_name, init_block_device, get_device_size};
-use proka_fs::check_fs_type;
-use std::io::{Seek, SeekFrom, Read, Write};
-use std::fs::File;
 use colored::Colorize;
+use proka_fs::check_fs_type;
+use proka_fs::definition::{DirEntry, Inode, SuperBlock};
+use proka_fs::{BlockDevice, convert_name, get_device_size, init_block_device};
+use std::fs::File;
+use std::io::{Read, Seek, SeekFrom, Write};
 
 const BLOCK_SIZE: usize = 1024;
 
@@ -22,23 +22,42 @@ struct Args {
 pub struct FileBlockDevice(File);
 
 impl BlockDevice for FileBlockDevice {
-    fn read_block(&mut self, block_num: u32, offset: u32, buf: &mut [u8]) -> Result<(), &'static str> {
-        self.0.seek(SeekFrom::Start(block_num as u64 * BLOCK_SIZE as u64 + offset as u64))
+    fn read_block(
+        &mut self,
+        block_num: u32,
+        offset: u32,
+        buf: &mut [u8],
+    ) -> Result<(), &'static str> {
+        self.0
+            .seek(SeekFrom::Start(
+                block_num as u64 * BLOCK_SIZE as u64 + offset as u64,
+            ))
             .map_err(|_| "Failed to seek to block")?;
         self.0.read_exact(buf).map_err(|_| "Failed to read block")
     }
 
     fn write_block(&mut self, block_num: u32, offset: u32, buf: &[u8]) -> Result<(), &'static str> {
-        self.0.seek(SeekFrom::Start(block_num as u64 * BLOCK_SIZE as u64 + offset as u64))
+        self.0
+            .seek(SeekFrom::Start(
+                block_num as u64 * BLOCK_SIZE as u64 + offset as u64,
+            ))
             .map_err(|_| "Failed to seek to block")?;
         self.0.write_all(buf).map_err(|_| "Failed to write block")
     }
 }
 
 fn main() -> Result<(), &'static str> {
-    println!("{}: The file system of {}", "ProkaFS (PKFS)".bold(), "ProkaOS".bold());
+    println!(
+        "{}: The file system of {}",
+        "ProkaFS (PKFS)".bold(),
+        "ProkaOS".bold()
+    );
     println!("mkpkfs {}", "v0.1.0".cyan().bold());
-    println!("Copyright (C) {} {year}, All rights reserved.", "RainSTR Studio".cyan().bold(), year = "2025-2026".bold());
+    println!(
+        "Copyright (C) {} {year}, All rights reserved.",
+        "RainSTR Studio".cyan().bold(),
+        year = "2025-2026".bold()
+    );
     println!();
     /* Prework: Initialize the program */
     // Parse the CLI args.
@@ -50,11 +69,17 @@ fn main() -> Result<(), &'static str> {
     // If size > 64MB, the data start block is 65536, which can store max 2,097,120 files.
     // otherwise, the data start block is 1024, but only 32768 files.
     let data_start_block = if check_fs_type(&args.path)? == proka_fs::definition::FsType::Standard {
-        println!("mkpkfs: [INFO] Detected the device size is {}MB", get_device_size(&args.path)? / 1024 / 1024);
+        println!(
+            "mkpkfs: [INFO] Detected the device size is {}MB",
+            get_device_size(&args.path)? / 1024 / 1024
+        );
         println!("mkpkfs: [INFO] Will use the Standard mode.");
         65536
     } else {
-        println!("mkpkfs: [INFO] Detected the device size is {}MB", get_device_size(&args.path)? / 1024 / 1024);
+        println!(
+            "mkpkfs: [INFO] Detected the device size is {}MB",
+            get_device_size(&args.path)? / 1024 / 1024
+        );
         println!("mkpkfs: [INFO] Will use the Minimum mode.");
         1024
     };
@@ -98,10 +123,14 @@ fn main() -> Result<(), &'static str> {
     };
 
     // 3.3: Write the "." and ".." entries to the root directory.
-    // 
+    //
     // # Note:
     // - The data block starts at block 1024, which is a constant currently.
     bd.write_block(data_start_block, 0, entry_dot.as_bytes())?;
-    bd.write_block(data_start_block, core::mem::size_of::<DirEntry>() as u32, entry_parent.as_bytes())?;
+    bd.write_block(
+        data_start_block,
+        core::mem::size_of::<DirEntry>() as u32,
+        entry_parent.as_bytes(),
+    )?;
     Ok(())
 }
