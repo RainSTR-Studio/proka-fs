@@ -3,6 +3,7 @@
 extern crate alloc;
 pub mod bitmap;
 pub mod definition;
+
 pub use bitmap::Bitmap;
 
 use crate::definition::Inode;
@@ -52,33 +53,54 @@ impl BlockDevice for FileBlockDevice {
         offset: u32,
         buf: &mut [u8],
     ) -> Result<(), &'static str> {
+        // Boundary check
+        if offset as usize + buf.len() > BLOCK_SIZE as usize {
+            return Err("Data exceeds block size");
+        }
+
+        // Read from file
         self.0
             .seek(SeekFrom::Start(
-                block_num as u64 * BLOCK_SIZE as u64 + offset as u64,
+                (block_num as u64 * BLOCK_SIZE as u64) + offset as u64,
             ))
             .map_err(|_| "Failed to seek to block")?;
         self.0.read_exact(buf).map_err(|_| "Failed to read block")
     }
 
     fn write_block(&mut self, block_num: u32, offset: u32, buf: &[u8]) -> Result<(), &'static str> {
+        // Boundary check
+        if offset as usize + buf.len() > BLOCK_SIZE as usize {
+            return Err("Data exceeds block size");
+        }
+
+        // Write to file
         self.0
             .seek(SeekFrom::Start(
-                block_num as u64 * BLOCK_SIZE as u64 + offset as u64,
+                (block_num as u64 * BLOCK_SIZE as u64) + offset as u64,
             ))
             .map_err(|_| "Failed to seek to block")?;
-        self.0.write_all(buf).map_err(|_| "Failed to write block")
+        self.0.write_all(buf).map_err(|_| "Failed to write block")?;
+        self.0.sync_all().map_err(|_| "Failed to sync block")
     }
 }
 
+/// Initialize the block device driver for the file system.
 ///
+/// # Parameters
+///
+/// * `file_path` - The path of the file to be used as the block device.
+///
+/// # Returns
+///
+/// * `Result<FileBlockDevice, String>` - The block device driver.
 #[cfg(feature = "std")]
-pub fn init_block_device(file_path: &str) -> Result<FileBlockDevice, &'static str> {
+pub fn init_block_device(file_path: &str) -> Result<FileBlockDevice, String> {
     let file = OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
         .open(file_path)
-        .map_err(|_| "Failed to open file")?;
+        .map_err(|e| format!("Failed to open file: {}", e))?;
 
     // Return the block device driver.
     Ok(FileBlockDevice(file))
@@ -107,8 +129,10 @@ impl<B: BlockDevice> FileSystem<B> {
     /// # Returns
     ///
     /// * `Self` - The mounted file system.
-    pub fn mount(bd: B, fs_type: definition::FsType) -> Self {
-        let super_block = definition::SuperBlock::new(fs_type);
+    pub fn mount(mut bd: B) -> Self {
+        let mut super_block_buf = [0u8; core::mem::size_of::<definition::SuperBlock>()];
+        bd.read_block(0, 0, &mut super_block_buf).unwrap();
+        let super_block = definition::SuperBlock::from_bytes(&super_block_buf).unwrap();
         let data_start_block = if super_block.fs_type == definition::FsType::Standard {
             65536
         } else {
@@ -117,7 +141,7 @@ impl<B: BlockDevice> FileSystem<B> {
 
         Self {
             block_device: bd,
-            super_block: super_block,
+            super_block: *super_block,
             data_start_block,
         }
     }
@@ -166,6 +190,7 @@ impl<B: BlockDevice> FileSystem<B> {
         } else {
             return Err("No block available");
         };
+        self.sync()?;
 
         // Alloc which inode has been used.
         let mut inode_bitmap = &mut self.super_block.inode_bitmap;
@@ -174,6 +199,7 @@ impl<B: BlockDevice> FileSystem<B> {
         } else {
             return Err("No inode available");
         };
+        self.sync()?;
 
         // Define that inode
         let inode = Inode {
@@ -196,9 +222,10 @@ impl<B: BlockDevice> FileSystem<B> {
         // Second, read the inode from the block device.
         let mut buf = [0u8; core::mem::size_of::<Inode>()];
         let (block_idx, offset) = Inode::locate(inode_id, &self.super_block);
-        if let Err(_) = self
+        if self
             .block_device
             .read_block(block_idx as u32, offset as u32, &mut buf)
+            .is_err()
         {
             return None;
         }
@@ -220,10 +247,11 @@ impl<B: BlockDevice> FileSystem<B> {
         };
 
         // 2. Calculate which block and offset the dir entry should be written.
-        parent_inode.file_length += 1;
+        let entry_size = core::mem::size_of::<definition::DirEntry>();
+        let data_offset = parent_inode.file_length as usize;
+        parent_inode.file_length += entry_size as u64;
+
         let data_block_head_idx = parent_inode.head_block as usize;
-        let data_offset =
-            parent_inode.file_length as usize * core::mem::size_of::<definition::DirEntry>();
 
         // 3. Create a dir entry.
         let name = convert_name(name.as_bytes());
@@ -335,8 +363,8 @@ impl<B: BlockDevice> FileSystem<B> {
 /// ```rust
 /// let name = convert_name(b"hello");
 /// ``````
-pub fn convert_name(name_src: &[u8]) -> [u8; 256] {
-    let mut name = [0u8; 256];
+pub fn convert_name(name_src: &[u8]) -> [u8; 252] {
+    let mut name = [0u8; 252];
     let len = name_src.len().min(name.len() - 1);
     name[..len].copy_from_slice(&name_src[..len]);
     name
@@ -344,7 +372,7 @@ pub fn convert_name(name_src: &[u8]) -> [u8; 256] {
 
 /// Decide the file system type through the file size.
 #[cfg(feature = "std")]
-pub fn check_fs_type(file_path: &str) -> Result<definition::FsType, &'static str> {
+pub fn check_fs_type(file_path: &str) -> Result<definition::FsType, String> {
     let file = OpenOptions::new()
         .read(true)
         .open(file_path)
@@ -359,7 +387,7 @@ pub fn check_fs_type(file_path: &str) -> Result<definition::FsType, &'static str
 
 /// Get the device size in bytes.
 #[cfg(feature = "std")]
-pub fn get_device_size(path: &str) -> Result<u64, &'static str> {
+pub fn get_device_size(path: &str) -> Result<u64, String> {
     let file = File::open(path).map_err(|_| "Failed to open file")?;
     let metadata = file.metadata().map_err(|_| "Failed to get metadata")?;
     Ok(metadata.len())

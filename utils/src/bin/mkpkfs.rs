@@ -1,13 +1,11 @@
 //! The tool to create the proka file system.
 use clap::Parser;
 use colored::Colorize;
-use proka_fs::check_fs_type;
+use proka_fs::bitmap::Bitmap;
 use proka_fs::definition::{DirEntry, Inode, SuperBlock};
-use proka_fs::{BlockDevice, convert_name, get_device_size, init_block_device};
-use std::fs::File;
-use std::io::{Read, Seek, SeekFrom, Write};
-
-const BLOCK_SIZE: usize = 1024;
+use proka_fs::{
+    BlockDevice, FileBlockDevice, check_fs_type, convert_name, get_device_size, init_block_device,
+};
 
 // Define CLI args
 #[derive(Parser)]
@@ -18,35 +16,7 @@ struct Args {
     path: String,
 }
 
-// Implement the block device for the file.
-pub struct FileBlockDevice(File);
-
-impl BlockDevice for FileBlockDevice {
-    fn read_block(
-        &mut self,
-        block_num: u32,
-        offset: u32,
-        buf: &mut [u8],
-    ) -> Result<(), &'static str> {
-        self.0
-            .seek(SeekFrom::Start(
-                block_num as u64 * BLOCK_SIZE as u64 + offset as u64,
-            ))
-            .map_err(|_| "Failed to seek to block")?;
-        self.0.read_exact(buf).map_err(|_| "Failed to read block")
-    }
-
-    fn write_block(&mut self, block_num: u32, offset: u32, buf: &[u8]) -> Result<(), &'static str> {
-        self.0
-            .seek(SeekFrom::Start(
-                block_num as u64 * BLOCK_SIZE as u64 + offset as u64,
-            ))
-            .map_err(|_| "Failed to seek to block")?;
-        self.0.write_all(buf).map_err(|_| "Failed to write block")
-    }
-}
-
-fn main() -> Result<(), &'static str> {
+fn main() -> Result<(), String> {
     println!(
         "{}: The file system of {}",
         "ProkaFS (PKFS)".bold(),
@@ -86,8 +56,11 @@ fn main() -> Result<(), &'static str> {
 
     /* Stage 1: Initialize the super block */
     println!("mkpkfs: [INFO] Initialize the super block...");
-    let super_block = SuperBlock::new(check_fs_type(&args.path)?);
-    bd.write_block(0, 0, super_block.as_bytes())?;
+    let mut super_block = SuperBlock::new(check_fs_type(&args.path)?);
+    let mut block_bitmap = &mut super_block.block_bitmap;
+    block_bitmap.set(0, true);
+    super_block.block_bitmap = *block_bitmap;
+    sync(&mut bd, &mut super_block)?;
 
     /* Stage 2: Initialize the root inode */
     println!("mkpkfs: [INFO] Initialize the root inode...");
@@ -99,6 +72,9 @@ fn main() -> Result<(), &'static str> {
         _reserved: [0; 8],
     };
     bd.write_block(1, 0, root_inode.as_bytes())?;
+    let mut inode_bitmap = &mut super_block.inode_bitmap;
+    inode_bitmap.set(0, true);
+    sync(&mut bd, &mut super_block)?;
 
     /* Stage 3: Initialize the root directory's basic information */
     // In this stage, we will create the root directory's basic information.
@@ -132,5 +108,10 @@ fn main() -> Result<(), &'static str> {
         core::mem::size_of::<DirEntry>() as u32,
         entry_parent.as_bytes(),
     )?;
+    Ok(())
+}
+
+fn sync(bd: &mut FileBlockDevice, superblock: &mut SuperBlock) -> Result<(), String> {
+    bd.write_block(0, 0, superblock.as_bytes())?;
     Ok(())
 }

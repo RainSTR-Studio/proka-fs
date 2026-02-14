@@ -1,6 +1,14 @@
 //! The bitmap which describes is the block bitmap and inode bitmap used.
 
 pub trait Bitmap {
+    /// Set up a bit's status
+    ///
+    /// # Parameters
+    ///
+    /// * `index` - The index of the block or inode.
+    /// * `used` - Whether the block or inode is used.
+    fn set(&mut self, index: usize, used: bool);
+
     /// Check if the block or inode is used.
     ///
     /// # Parameters
@@ -35,6 +43,10 @@ pub trait Bitmap {
 }
 
 impl<const N: usize> Bitmap for &mut [u8; N] {
+    fn set(&mut self, index: usize, used: bool) {
+        self[index] = if used { 1 } else { 0 };
+    }
+
     fn is_used(&self, index: usize) -> bool {
         self[index] != 0
     }

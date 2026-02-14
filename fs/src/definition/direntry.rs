@@ -6,14 +6,14 @@ pub struct DirEntry {
     pub inode: u32,
 
     /// The name of the directory, which contains up to 255 characters.
-    pub name: [u8; 256],
+    pub name: [u8; 252],
 }
 
 impl DirEntry {
     pub const fn empty() -> Self {
         Self {
             inode: 0,
-            name: [0; 256],
+            name: [0; 252],
         }
     }
 

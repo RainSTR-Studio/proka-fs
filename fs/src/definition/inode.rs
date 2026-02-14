@@ -81,7 +81,8 @@ impl Inode {
         if buf.len() < core::mem::size_of::<Self>() {
             return None;
         }
-        let inode = unsafe { &*(buf[0] as *const u8 as *const Self) };
+        let ptr = buf.as_ptr() as *const Self;
+        let inode: &Self = unsafe { &*ptr };
         Some(inode)
     }
 
