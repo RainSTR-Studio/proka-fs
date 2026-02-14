@@ -13,7 +13,25 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os}}
+    strategy:
+      matrix:
+        include: 
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: mkpkfs
+            archive_ext: tar.gz
+
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact_name: mkpkfs
+            archive_ext: zip
+          
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: mkpkfs.exe
+            archive_ext: zip
+    
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -22,20 +40,25 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
+          targets: ${{ matrix.target }}
 
       - name: Build Release
-        run: cargo build --release
+        run: cargo build --release --target ${{ matrix.target }}
 
       - name: Pack Binary
+        shell: bash
         run: |
-          cd target/release
           VERSION=${{ github.ref_name }}
-          tar -czvf ../../pkfs-utils-$VERSION.tar.gz mkpkfs
+          if [ "${{matrix.os}}" = "ubuntu-latest" ]; then
+            tar -czvf pkfs-utils-$VERSION-${{ matrix.target }}.tar.gz target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
+          else
+            tar -czvf pkfs-utils-$VERSION-${{ matrix.target }}.zip target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
+          fi
 
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
         with:
-          files: pkfs-utils-*.tar.gz
+          files: pkfs-utils-*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
