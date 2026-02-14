@@ -1,7 +1,10 @@
 [package]
 name = "proka-fs-utils"
-version = "0.1.1"
+version = "0.1.2"
+authors = ["zhangxuan2011 <zx20110412@outlook.com>"]
 edition = "2024"
+description = "The utilities of ProkaFS"
+license = "GPL-3.0"
 
 [dependencies]
 clap = { version = "4.5.58", features = ["derive"] }
