@@ -6,4 +6,4 @@ members = [
 resolver = "2"
 
 [workspace.dependencies]
-proka-fs = { path = "fs", features = ["std"]}
+proka-fs = { version = "0", features = ["std"]}
