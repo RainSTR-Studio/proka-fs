@@ -57,7 +57,7 @@ jobs:
           chmod +x ${{ matrix.artifact_name }}
           if [ "${{matrix.os}}" = "ubuntu-latest" ]; then
             tar -czvf pkfs-utils-$VERSION-${{ matrix.target_short }}.tar.gz ${{ matrix.artifact_name }}
-          else if [ "${{matrix.os}}" = "macos-latest" ]; then
+          elif [ "${{matrix.os}}" = "macos-latest" ]; then
             zip pkfs-utils-$VERSION-${{ matrix.target_short }}.zip ${{ matrix.artifact_name }}
           else
             powershell -Command Compress-Archive -Path ${{ matrix.artifact_name }} -DestinationPath pkfs-utils-$VERSION-${{ matrix.target_short }}.zip -Force
