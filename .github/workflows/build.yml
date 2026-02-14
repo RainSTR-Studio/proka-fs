@@ -57,7 +57,7 @@ jobs:
           if [ "${{matrix.os}}" = "ubuntu-latest" ]; then
             tar -czvf pkfs-utils-$VERSION-${{ matrix.target_short }}.tar.gz ${{ matrix.artifact_name }}
           else
-            zip pkfs-utils-$VERSION-${{ matrix.target_short }}.zip ${{ matrix.artifact_name }}
+            powershell -Command Compress-Archive -Path ${{ matrix.artifact_name }} -DestinationPath pkfs-utils-$VERSION-${{ matrix.target_short }}.zip -Force
           fi
 
       - name: Upload to Release
