@@ -53,11 +53,6 @@ impl BlockDevice for FileBlockDevice {
         offset: u32,
         buf: &mut [u8],
     ) -> Result<(), &'static str> {
-        // Boundary check
-        if offset as usize + buf.len() > BLOCK_SIZE as usize {
-            return Err("Data exceeds block size");
-        }
-
         // Read from file
         self.0
             .seek(SeekFrom::Start(
@@ -68,11 +63,6 @@ impl BlockDevice for FileBlockDevice {
     }
 
     fn write_block(&mut self, block_num: u32, offset: u32, buf: &[u8]) -> Result<(), &'static str> {
-        // Boundary check
-        if offset as usize + buf.len() > BLOCK_SIZE as usize {
-            return Err("Data exceeds block size");
-        }
-
         // Write to file
         self.0
             .seek(SeekFrom::Start(
@@ -292,7 +282,7 @@ impl<B: BlockDevice> FileSystem<B> {
     }
 
     /// Create a directory.
-    pub fn mkdir(&mut self) -> Result<(), &'static str> {
+    pub fn mkdir(&mut self, parent_inode_id: u32, name: &str) -> Result<(), &'static str> {
         // 1. Allocate an inode.
         let inode_num = self.alloc_inode(definition::FileType::Directory).unwrap();
 
@@ -303,17 +293,17 @@ impl<B: BlockDevice> FileSystem<B> {
 
         // 3. Create a '.' and '..' entry in the directory.
         // 3.1 Create a '.' entry.
-        let name = convert_name(b".");
+        let dot_name = convert_name(b".");
         let dot_dir_entry = definition::DirEntry {
             inode: inode_num.0.inode_id,
-            name,
+            name: dot_name,
         };
 
         // 3.2 Create a '..' entry.
-        let name = convert_name(b"..");
+        let parent_name = convert_name(b"..");
         let dot_dot_dir_entry = definition::DirEntry {
-            inode: inode_num.0.inode_id,
-            name,
+            inode: parent_inode_id,
+            name: parent_name,
         };
 
         // 3.3 Write the '.' and '..' entry to the block device.
@@ -325,6 +315,11 @@ impl<B: BlockDevice> FileSystem<B> {
             (offset + core::mem::size_of::<definition::DirEntry>()) as u32,
             &dot_dot_dir_entry.as_bytes(),
         )?;
+
+        /* Stage 4: Add dir entry to parent direcotry */
+        // 4.1: Get the parent inode
+        self.add_dir_entry(parent_inode_id, name, inode_num.0.inode_id)?;
+
         Ok(())
     }
 
@@ -356,13 +351,14 @@ impl<B: BlockDevice> FileSystem<B> {
 ///
 /// # Returns
 ///
-/// * `[u8; 256]` - The converted name.
+/// * `[u8; 252]` - The converted name.
 ///
 /// # Example
 ///
 /// ```rust
+/// use proka_fs::convert_name;
 /// let name = convert_name(b"hello");
-/// ``````
+/// ```
 pub fn convert_name(name_src: &[u8]) -> [u8; 252] {
     let mut name = [0u8; 252];
     let len = name_src.len().min(name.len() - 1);
