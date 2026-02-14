@@ -19,16 +19,19 @@ jobs:
         include: 
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
+            target_short: x86_64-linux
             artifact_name: mkpkfs
             archive_ext: tar.gz
 
           - os: macos-latest
             target: x86_64-apple-darwin
+            target_short: x86_64-mac
             artifact_name: mkpkfs
             archive_ext: zip
           
           - os: windows-latest
             target: x86_64-pc-windows-msvc
+            target_short: x86_64-win
             artifact_name: mkpkfs.exe
             archive_ext: zip
     
@@ -52,9 +55,9 @@ jobs:
           VERSION=${{ github.ref_name }}
           cp $TARGET_DIR/${{ matrix.artifact_name }} .
           if [ "${{matrix.os}}" = "ubuntu-latest" ]; then
-            tar -czvf pkfs-utils-$VERSION-${{ matrix.target }}.tar.gz ${{ matrix.artifact_name }}
+            tar -czvf pkfs-utils-$VERSION-${{ matrix.target_short }}.tar.gz ${{ matrix.artifact_name }}
           else
-            zip pkfs-utils-$VERSION-${{ matrix.target }}.zip ${{ matrix.artifact_name }}
+            zip pkfs-utils-$VERSION-${{ matrix.target_short }}.zip ${{ matrix.artifact_name }}
           fi
 
       - name: Upload to Release
