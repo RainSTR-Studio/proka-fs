@@ -123,16 +123,11 @@ impl<B: BlockDevice> FileSystem<B> {
         let mut super_block_buf = [0u8; core::mem::size_of::<definition::SuperBlock>()];
         bd.read_block(0, 0, &mut super_block_buf).unwrap();
         let super_block = definition::SuperBlock::from_bytes(&super_block_buf).unwrap();
-        let data_start_block = if super_block.fs_type == definition::FsType::Standard {
-            65536
-        } else {
-            1024
-        };
 
         Self {
             block_device: bd,
             super_block: *super_block,
-            data_start_block,
+            data_start_block: super_block.data_start_block,
         }
     }
 
@@ -169,19 +164,12 @@ impl<B: BlockDevice> FileSystem<B> {
     /// # Returns
     ///
     /// * `(Inode, u32)` - The inode and the block number.
+    /// * `Err(&'static str)` - If no inode available.
     fn alloc_inode(
         &mut self,
         file_type: definition::FileType,
-    ) -> Result<(Inode, u32), &'static str> {
-        // Alloc which bitmap has been used.
-        let mut block_bitmap = &mut self.super_block.block_bitmap;
-        let block_num = if let Some(i) = block_bitmap.alloc(65536).map(|i| i as u32) {
-            i
-        } else {
-            return Err("No block available");
-        };
-        self.sync()?;
-
+        block_num: u32,
+    ) -> Result<Inode, &'static str> {
         // Alloc which inode has been used.
         let mut inode_bitmap = &mut self.super_block.inode_bitmap;
         let inode_num = if let Some(i) = inode_bitmap.alloc(128) {
@@ -193,13 +181,14 @@ impl<B: BlockDevice> FileSystem<B> {
 
         // Define that inode
         let inode = Inode {
+            is_used: true,
             inode_id: inode_num,
             file_type,
             head_block: block_num, // Problem: Can't sure that the behind block is free, being optimized.
             file_length: 0,
-            _reserved: [0; 8],
+            _reserved: [0; 7],
         };
-        Ok((inode, block_num))
+        Ok(inode)
     }
 
     fn get_inode(&mut self, inode_id: u32) -> Option<Inode> {
@@ -220,6 +209,11 @@ impl<B: BlockDevice> FileSystem<B> {
             return None;
         }
         let inode = Inode::from_bytes(&buf)?;
+
+        // Check is the inode used.
+        if !inode.is_used {
+            return None;
+        }
         Some(*inode)
     }
 
@@ -268,34 +262,34 @@ impl<B: BlockDevice> FileSystem<B> {
     pub fn mkfile(&mut self, parent_inode_id: u32, name: &str) -> Result<(), &'static str> {
         /* Stage 1: Allocate an inode. */
         // 1.1: Allocate an inode.
-        let inode_num = self.alloc_inode(definition::FileType::Regular).unwrap();
+        let inode = self.alloc_inode(definition::FileType::Regular, self.super_block.total_block_num)?;
 
         // 1.2: Write the inode to the block device.
-        let (block_idx, offset) = Inode::locate(inode_num.0.inode_id, &self.super_block);
+        let (block_idx, offset) = Inode::locate(inode.inode_id, &self.super_block);
         self.block_device
-            .write_block(block_idx as u32, offset as u32, &inode_num.0.as_bytes())?;
+            .write_block(block_idx as u32, offset as u32, &inode.as_bytes())?;
 
         /* Stage 2: Create the dir entry for its parent directory. */
         // Write the dir entry to the block device.
-        self.add_dir_entry(parent_inode_id, name, inode_num.0.inode_id)?;
+        self.add_dir_entry(parent_inode_id, name, inode.inode_id)?;
         Ok(())
     }
 
     /// Create a directory.
     pub fn mkdir(&mut self, parent_inode_id: u32, name: &str) -> Result<(), &'static str> {
         // 1. Allocate an inode.
-        let inode_num = self.alloc_inode(definition::FileType::Directory).unwrap();
+        let inode = self.alloc_inode(definition::FileType::Directory, self.super_block.total_block_num)?;
 
         // 2. Write the inode to the block device.
-        let offset = inode_num.0.inode_id as usize * core::mem::size_of::<Inode>();
+        let (block_idx, offset) = Inode::locate(inode.inode_id, &self.super_block);
         self.block_device
-            .write_block(inode_num.1, offset as u32, &inode_num.0.as_bytes())?;
+            .write_block(block_idx as u32, offset as u32, &inode.as_bytes())?;
 
         // 3. Create a '.' and '..' entry in the directory.
         // 3.1 Create a '.' entry.
         let dot_name = convert_name(b".");
         let dot_dir_entry = definition::DirEntry {
-            inode: inode_num.0.inode_id,
+            inode: inode.inode_id,
             name: dot_name,
         };
 
@@ -307,18 +301,18 @@ impl<B: BlockDevice> FileSystem<B> {
         };
 
         // 3.3 Write the '.' and '..' entry to the block device.
-        let offset = inode_num.0.inode_id as usize * core::mem::size_of::<definition::DirEntry>();
+        let (block_idx, offset) = Inode::locate(inode.inode_id, &self.super_block);
         self.block_device
-            .write_block(inode_num.1, offset as u32, &dot_dir_entry.as_bytes())?;
+            .write_block(block_idx as u32, offset as u32, &dot_dir_entry.as_bytes())?;
         self.block_device.write_block(
-            inode_num.1,
+            block_idx as u32,
             (offset + core::mem::size_of::<definition::DirEntry>()) as u32,
             &dot_dot_dir_entry.as_bytes(),
         )?;
 
         /* Stage 4: Add dir entry to parent direcotry */
         // 4.1: Get the parent inode
-        self.add_dir_entry(parent_inode_id, name, inode_num.0.inode_id)?;
+        self.add_dir_entry(parent_inode_id, name, inode.inode_id)?;
 
         Ok(())
     }
@@ -364,21 +358,6 @@ pub fn convert_name(name_src: &[u8]) -> [u8; 252] {
     let len = name_src.len().min(name.len() - 1);
     name[..len].copy_from_slice(&name_src[..len]);
     name
-}
-
-/// Decide the file system type through the file size.
-#[cfg(feature = "std")]
-pub fn check_fs_type(file_path: &str) -> Result<definition::FsType, String> {
-    let file = OpenOptions::new()
-        .read(true)
-        .open(file_path)
-        .map_err(|_| "Failed to open file")?;
-    let file_size = file.metadata().map_err(|_| "Failed to get metadata")?.len();
-    if file_size > 64 * 1024 * 1024 {
-        Ok(definition::FsType::Standard)
-    } else {
-        Ok(definition::FsType::Minimum)
-    }
 }
 
 /// Get the device size in bytes.

@@ -1,18 +1,3 @@
-/// The file system type.
-#[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum FsType {
-    /// The standard system type, which can store about 2097152 files.
-    ///
-    /// Uses in > 64MB disk.
-    Standard = 0,
-
-    /// The Minimum file system type, which can *only* store about 32768 files.
-    ///
-    /// Uses in <= 64MB disk.
-    Minimum = 1,
-}
-
 /// The definition of the super block.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -23,17 +8,23 @@ pub struct SuperBlock {
     /// The size of each block in bytes.
     pub block_size: u32,
 
-    /// The type of the file system.
-    pub fs_type: FsType,
+    /// The block number where the inode start.
+    pub inode_start_block: u32,
 
     /// The block number where the data starts.
     pub data_start_block: u32,
+
+    /// The partition size in bytes.
+    pub partition_size: u64,
+
+    /// The total block number in the partition.
+    pub total_block_num: u32,
 
     /// The bitmap which indicates whether each block is used.
     pub block_bitmap: [u8; 128], // 128 * 8 = 1024 = 1 block
 
     /// The bitmap which indicates whether each inode is used.
-    pub inode_bitmap: [u8; 128], // 128 * 8 = 1024 = 1 block
+    pub inode_bitmap: [u8; 262144], // 262144 * 8 = 2097152, which is the total block num
 }
 
 impl SuperBlock {
@@ -102,14 +93,26 @@ impl SuperBlock {
 }
 
 impl SuperBlock {
-    pub fn new(fs_type: FsType) -> Self {
+    /// Init a superblock object.
+    ///
+    /// # Parameters
+    ///
+    /// * `fs_type` - The file system type.
+    /// * `partition_size` - The partition size in bytes.
+    ///
+    /// # Returns
+    ///
+    /// * `Self` - The superblock object.
+    pub fn new(partition_size: u64) -> Self {
         Self {
             magic: 0x504B4653,
             block_size: 1024,
-            fs_type,
-            data_start_block: 65536,
+            inode_start_block: 257,
+            data_start_block: 65536+256,
+            partition_size,
+            total_block_num: (partition_size / 1024) as u32,
             block_bitmap: [0; 128],
-            inode_bitmap: [0; 128],
+            inode_bitmap: [0; 262144],
         }
     }
 }

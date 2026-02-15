@@ -18,6 +18,9 @@ pub enum FileType {
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Inode {
+    /// Sign is this ID used.
+    pub is_used: bool,
+
     /// The ID of this inode.
     pub inode_id: u32,
 
@@ -36,7 +39,7 @@ pub struct Inode {
     pub file_length: u64,
 
     /// Reserved data
-    pub _reserved: [u8; 8],
+    pub _reserved: [u8; 7],
 }
 
 impl Inode {

@@ -4,7 +4,7 @@ use colored::Colorize;
 use proka_fs::bitmap::Bitmap;
 use proka_fs::definition::{DirEntry, Inode, SuperBlock};
 use proka_fs::{
-    BlockDevice, FileBlockDevice, check_fs_type, convert_name, get_device_size, init_block_device,
+    BlockDevice, FileBlockDevice, convert_name, get_device_size, init_block_device,
 };
 
 // Define CLI args
@@ -29,47 +29,31 @@ fn main() -> Result<(), String> {
         year = "2025-2026".bold()
     );
     println!();
+
     /* Prework: Initialize the program */
     // Parse the CLI args.
     let args = Args::parse();
     // Open the file.
     let mut bd = init_block_device(&args.path)?;
-
-    // Decide the data start block
-    // If size > 64MB, the data start block is 65536, which can store max 2,097,120 files.
-    // otherwise, the data start block is 1024, but only 32768 files.
-    let data_start_block = if check_fs_type(&args.path)? == proka_fs::definition::FsType::Standard {
-        println!(
-            "mkpkfs: [INFO] Detected the device size is {}MB",
-            get_device_size(&args.path)? / 1024 / 1024
-        );
-        println!("mkpkfs: [INFO] Will use the Standard mode.");
-        65536
-    } else {
-        println!(
-            "mkpkfs: [INFO] Detected the device size is {}MB",
-            get_device_size(&args.path)? / 1024 / 1024
-        );
-        println!("mkpkfs: [INFO] Will use the Minimum mode.");
-        1024
-    };
-
     /* Stage 1: Initialize the super block */
     println!("mkpkfs: [INFO] Initialize the super block...");
-    let mut super_block = SuperBlock::new(check_fs_type(&args.path)?);
+    let mut super_block = SuperBlock::new(get_device_size(&args.path)?);
     let mut block_bitmap = &mut super_block.block_bitmap;
     block_bitmap.set(0, true);
     super_block.block_bitmap = *block_bitmap;
     sync(&mut bd, &mut super_block)?;
 
+    let data_start_block = 65536+256;
+
     /* Stage 2: Initialize the root inode */
     println!("mkpkfs: [INFO] Initialize the root inode...");
     let root_inode = Inode {
+        is_used: true,
         inode_id: 0,
         file_type: proka_fs::definition::FileType::Directory,
         head_block: data_start_block,
         file_length: 2 * core::mem::size_of::<DirEntry>() as u64,
-        _reserved: [0; 8],
+        _reserved: [0; 7],
     };
     bd.write_block(1, 0, root_inode.as_bytes())?;
     let mut inode_bitmap = &mut super_block.inode_bitmap;
