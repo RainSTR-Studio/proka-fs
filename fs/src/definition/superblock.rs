@@ -16,12 +16,6 @@ pub struct SuperBlock {
 
     /// The total block number in the partition.
     pub total_block_num: u32,
-
-    /// The bitmap which indicates whether each block is used.
-    pub block_bitmap: [u8; 128], // 128 * 8 = 1024 = 1 block
-
-    /// The bitmap which indicates whether each inode is used.
-    pub inode_bitmap: [u8; 262144], // 262144 * 8 = 2097152, which is the total block num
 }
 
 impl SuperBlock {
@@ -107,8 +101,6 @@ impl SuperBlock {
             inode_start_block: 257,
             data_start_block: 65536+256,
             total_block_num: (partition_size / 1024) as u32,
-            block_bitmap: [0; 128],
-            inode_bitmap: [0; 262144],
         }
     }
 }

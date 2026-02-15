@@ -160,6 +160,12 @@ impl<B: BlockDevice> FileSystem<B> {
     }
 
     /// Allocate an inode.
+    /// 
+    /// # Parameters
+    ///
+    /// * `block_num` - The block number to store the inode.
+    /// * `file_type` - The type of the file.
+    /// * `max_range` - The max inode number to search.
     ///
     /// # Returns
     ///
@@ -167,37 +173,31 @@ impl<B: BlockDevice> FileSystem<B> {
     /// * `Err(&'static str)` - If no inode available.
     fn alloc_inode(
         &mut self,
-        file_type: definition::FileType,
         block_num: u32,
+        file_type: definition::FileType,
+        max_range: usize,
     ) -> Result<Inode, &'static str> {
-        // Alloc which inode has been used.
-        let mut inode_bitmap = &mut self.super_block.inode_bitmap;
-        let inode_num = if let Some(i) = inode_bitmap.alloc(128) {
-            i as u32
-        } else {
-            return Err("No inode available");
-        };
-        self.sync()?;
-
-        // Define that inode
-        let inode = Inode {
-            is_used: true,
-            inode_id: inode_num,
-            file_type,
-            head_block: block_num, // Problem: Can't sure that the behind block is free, being optimized.
-            file_length: 0,
-            _reserved: [0; 7],
-        };
-        Ok(inode)
+        for inode_id in 0..max_range {
+            let inode = self.get_inode(inode_id as u32).unwrap();
+            if !inode.is_used {
+                // Define that inode
+                let inode = Inode {
+                    is_used: true,
+                    inode_id: inode_id as u32,
+                    file_type,
+                    head_block: block_num, // Problem: Can't sure that the behind block is free, being optimized.
+                    file_length: 0,
+                    _reserved: [0; 7],
+                };
+                return Ok(inode);
+            } else {
+                continue;
+            }
+        }
+        Err("No inode available")
     }
 
     fn get_inode(&mut self, inode_id: u32) -> Option<Inode> {
-        // First, check is the inode exists.
-        let inode_bitmap = &mut self.super_block.inode_bitmap;
-        if !inode_bitmap.is_used(inode_id as usize) {
-            return None;
-        }
-
         // Second, read the inode from the block device.
         let mut buf = [0u8; core::mem::size_of::<Inode>()];
         let (block_idx, offset) = Inode::locate(inode_id, &self.super_block);
@@ -262,7 +262,7 @@ impl<B: BlockDevice> FileSystem<B> {
     pub fn mkfile(&mut self, parent_inode_id: u32, name: &str) -> Result<(), &'static str> {
         /* Stage 1: Allocate an inode. */
         // 1.1: Allocate an inode.
-        let inode = self.alloc_inode(definition::FileType::Regular, self.super_block.total_block_num)?;
+        let inode = self.alloc_inode(self.super_block.total_block_num, definition::FileType::Regular, self.get_max_inode())?;
 
         // 1.2: Write the inode to the block device.
         let (block_idx, offset) = Inode::locate(inode.inode_id, &self.super_block);
@@ -278,7 +278,7 @@ impl<B: BlockDevice> FileSystem<B> {
     /// Create a directory.
     pub fn mkdir(&mut self, parent_inode_id: u32, name: &str) -> Result<(), &'static str> {
         // 1. Allocate an inode.
-        let inode = self.alloc_inode(definition::FileType::Directory, self.super_block.total_block_num)?;
+        let inode = self.alloc_inode(self.data_start_block, definition::FileType::Directory, self.get_max_inode())?;
 
         // 2. Write the inode to the block device.
         let (block_idx, offset) = Inode::locate(inode.inode_id, &self.super_block);

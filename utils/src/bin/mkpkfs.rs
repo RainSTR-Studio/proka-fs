@@ -1,11 +1,8 @@
 //! The tool to create the proka file system.
 use clap::Parser;
 use colored::Colorize;
-use proka_fs::bitmap::Bitmap;
 use proka_fs::definition::{DirEntry, Inode, SuperBlock};
-use proka_fs::{
-    BlockDevice, FileBlockDevice, convert_name, get_device_size, init_block_device,
-};
+use proka_fs::{BlockDevice, FileBlockDevice, convert_name, get_device_size, init_block_device};
 
 // Define CLI args
 #[derive(Parser)]
@@ -39,11 +36,8 @@ fn main() {
         /* Stage 1: Initialize the super block */
         println!("mkpkfs: [INFO] Initialize the super block...");
         let mut super_block = SuperBlock::new(get_device_size(&args.path)?);
-        let mut block_bitmap = &mut super_block.block_bitmap;
-        block_bitmap.set(0, true);
-        super_block.block_bitmap = *block_bitmap;
         sync(&mut bd, &mut super_block)?;
-        let data_start_block = 65792;   // 65536 + 256
+        let data_start_block = 65792; // 65536 + 256
 
         // Check is the size is > 64MB
         if get_device_size(&args.path)? < 64 * 1024 * 1024 {
@@ -61,8 +55,6 @@ fn main() {
             _reserved: [0; 7],
         };
         bd.write_block(1, 0, root_inode.as_bytes())?;
-        let mut inode_bitmap = &mut super_block.inode_bitmap;
-        inode_bitmap.set(0, true);
         sync(&mut bd, &mut super_block)?;
 
         /* Stage 3: Initialize the root directory's basic information */
