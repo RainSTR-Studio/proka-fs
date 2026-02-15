@@ -14,9 +14,6 @@ pub struct SuperBlock {
     /// The block number where the data starts.
     pub data_start_block: u32,
 
-    /// The partition size in bytes.
-    pub partition_size: u64,
-
     /// The total block number in the partition.
     pub total_block_num: u32,
 
@@ -109,7 +106,6 @@ impl SuperBlock {
             block_size: 1024,
             inode_start_block: 257,
             data_start_block: 65536+256,
-            partition_size,
             total_block_num: (partition_size / 1024) as u32,
             block_bitmap: [0; 128],
             inode_bitmap: [0; 262144],

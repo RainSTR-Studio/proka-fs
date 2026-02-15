@@ -337,7 +337,7 @@ impl<B: BlockDevice> FileSystem<B> {
     }
 }
 
-/// Convert a name to a 256 bytes array.
+/// Convert a name to a 252 bytes array.
 ///
 /// # Parameters
 ///
