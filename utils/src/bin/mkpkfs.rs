@@ -2,7 +2,7 @@
 use clap::Parser;
 use colored::Colorize;
 use proka_fs::definition::{DirEntry, Inode, SuperBlock};
-use proka_fs::{BlockDevice, FileBlockDevice, convert_name, get_device_size, init_block_device};
+use proka_fs::{BlockDevice, FileBlockDevice, GenericFsData, convert_name, get_device_size, init_block_device};
 
 // Define CLI args
 #[derive(Parser)]

@@ -8,8 +8,8 @@ pub struct SuperBlock {
     /// The size of each block in bytes.
     pub block_size: u32,
 
-    /// The block number where the inode start.
-    pub inode_start_block: u32,
+    /// The block number where the block bitmap starts.
+    pub bitmap_start_block: u32,
 
     /// The block number where the data starts.
     pub data_start_block: u32,
@@ -18,13 +18,9 @@ pub struct SuperBlock {
     pub total_block_num: u32,
 }
 
-impl SuperBlock {
-    /// Get the super block as a byte slice.
-    ///
-    /// # Returns
-    ///
-    /// * `&[u8]` - The super block as a byte slice.
-    pub fn as_bytes(&self) -> &[u8] {
+impl crate::GenericFsData for SuperBlock {
+
+    fn as_bytes(&self) -> &[u8] {
         unsafe {
             core::slice::from_raw_parts(
                 self as *const Self as *const u8,
@@ -33,12 +29,8 @@ impl SuperBlock {
         }
     }
 
-    /// Get the super block as a mutable byte slice.
-    ///
-    /// # Returns
-    ///
-    /// * `&mut [u8]` - The super block as a mutable byte slice.
-    pub fn as_mut_bytes(&mut self) -> &mut [u8] {
+
+    fn as_mut_bytes(&mut self) -> &mut [u8] {
         unsafe {
             core::slice::from_raw_parts_mut(
                 self as *mut Self as *mut u8,
@@ -47,16 +39,8 @@ impl SuperBlock {
         }
     }
 
-    /// Create an inode object by a slice.
-    ///
-    /// # Parameters
-    ///
-    /// * `buf` - The slice of bytes.
-    ///
-    /// # Returns
-    ///
-    /// * `Self` - The inode object.
-    pub fn from_bytes(buf: &[u8]) -> Option<&Self> {
+
+    fn from_bytes(buf: &[u8]) -> Option<&Self> {
         if buf.len() < core::mem::size_of::<Self>() {
             return None;
         }
@@ -65,16 +49,7 @@ impl SuperBlock {
         Some(inode)
     }
 
-    /// Create this inode object by a mutable slice.
-    ///
-    /// # Parameters
-    ///
-    /// * `buf` - The slice of bytes.
-    ///
-    /// # Returns
-    ///
-    /// * `Self` - The inode object.
-    pub fn from_bytes_mut(buf: &mut [u8]) -> Option<&mut Self> {
+    fn from_mut_bytes(buf: &mut [u8]) -> Option<&mut Self> {
         if buf.len() < core::mem::size_of::<Self>() {
             return None;
         }
@@ -95,12 +70,14 @@ impl SuperBlock {
     ///
     /// * `Self` - The superblock object.
     pub fn new(partition_size: u64) -> Self {
+        let total_block_num: usize = partition_size as usize / 1024;
+        let data_start_block = total_block_num as u32 / 1024 + 65536;
         Self {
             magic: 0x504B4653,
             block_size: 1024,
-            inode_start_block: 257,
-            data_start_block: 65536+256,
-            total_block_num: (partition_size / 1024) as u32,
+            bitmap_start_block: 1,
+            data_start_block,
+            total_block_num: total_block_num as u32,
         }
     }
 }

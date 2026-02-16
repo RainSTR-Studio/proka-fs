@@ -6,7 +6,7 @@ pub mod definition;
 
 pub use bitmap::Bitmap;
 
-use crate::definition::Inode;
+use crate::{bitmap::BlockBitmap, definition::Inode};
 use alloc::vec::Vec;
 
 #[cfg(feature = "std")]
@@ -94,6 +94,49 @@ pub fn init_block_device(file_path: &str) -> Result<FileBlockDevice, String> {
 
     // Return the block device driver.
     Ok(FileBlockDevice(file))
+}
+
+/// The generic data in the file system.
+pub trait GenericFsData {
+    /// Create an inode object by a slice.
+    ///
+    /// # Parameters
+    ///
+    /// * `buf` - The slice of bytes.
+    ///
+    /// # Returns
+    ///
+    /// * `Self` - The inode object.
+    fn from_bytes(bytes: &[u8]) -> Option<&Self>
+    where
+        Self: Sized;
+
+    /// Get the super block as a byte slice.
+    ///
+    /// # Returns
+    ///
+    /// * `&[u8]` - The super block as a byte slice.
+    fn as_bytes(&self) -> &[u8];
+
+    /// Create this inode object by a mutable slice.
+    ///
+    /// # Parameters
+    ///
+    /// * `buf` - The slice of bytes.
+    ///
+    /// # Returns
+    ///
+    /// * `Self` - The inode object.
+    fn from_mut_bytes(bytes: &mut [u8]) -> Option<&mut Self>
+    where
+        Self: Sized;
+
+    /// Get the super block as a mutable byte slice.
+    ///
+    /// # Returns
+    ///
+    /// * `&mut [u8]` - The super block as a mutable byte slice.
+    fn as_mut_bytes(&mut self) -> &mut [u8];
 }
 
 /// The basic structure of the whole file system.

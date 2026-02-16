@@ -16,8 +16,10 @@ impl DirEntry {
             name: [0; 252],
         }
     }
+}
 
-    pub fn as_bytes(&self) -> &[u8] {
+impl crate::GenericFsData for DirEntry {
+    fn as_bytes(&self) -> &[u8] {
         unsafe {
             core::slice::from_raw_parts(
                 self as *const Self as *const u8,
@@ -26,12 +28,30 @@ impl DirEntry {
         }
     }
 
-    pub fn as_mut_bytes(&mut self) -> &mut [u8] {
+    fn as_mut_bytes(&mut self) -> &mut [u8] {
         unsafe {
             core::slice::from_raw_parts_mut(
                 self as *mut Self as *mut u8,
                 core::mem::size_of::<Self>(),
             )
         }
+    }
+
+    fn from_bytes(bytes: &[u8]) -> Option<&Self>
+        where
+            Self: Sized {
+        if bytes.len() < core::mem::size_of::<Self>() {
+            return None;
+        }
+        let dir_entry = unsafe { &*(bytes[0] as *const u8 as *const Self) };
+        Some(dir_entry)
+    }
+
+    fn from_mut_bytes(buf: &mut [u8]) -> Option<&mut Self> {
+        if buf.len() < core::mem::size_of::<Self>() {
+            return None;
+        }
+        let dir_entry = unsafe { &mut *(buf[0] as *mut u8 as *mut Self) };
+        Some(dir_entry)
     }
 }
