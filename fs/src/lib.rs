@@ -192,7 +192,11 @@ impl<B: BlockDevice> FileSystem<B> {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```no_run
+    /// use proka_fs:FileSystem;
+    /// 
+    /// let bd = init_block_device("test.img").unwrap();
+    /// 
     /// let fs = FileSystem::mount(bd);
     /// let max_inode = fs.get_max_inode();
     /// let max_inode_id = max_inode - 1;
