@@ -1,0 +1,7 @@
+{
+    "markdown.validate.enabled": true,
+    "conventionalCommits.scopes": [
+        "mkpkfs",
+        "blockbitmap"
+    ]
+}
