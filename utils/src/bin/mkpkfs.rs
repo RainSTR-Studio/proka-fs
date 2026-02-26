@@ -1,8 +1,12 @@
 //! The tool to create the proka file system.
 use clap::Parser;
 use colored::Colorize;
+use proka_fs::bitmap::BlockBitmap;
 use proka_fs::definition::{DirEntry, Inode, SuperBlock};
-use proka_fs::{BlockDevice, FileBlockDevice, GenericFsData, convert_name, get_device_size, init_block_device};
+use proka_fs::{
+    Bitmap, BlockDevice, FileBlockDevice, GenericFsData, convert_name, get_device_size,
+    init_block_device,
+};
 
 // Define CLI args
 #[derive(Parser)]
@@ -57,7 +61,40 @@ fn main() {
         bd.write_block(1, 0, root_inode.as_bytes())?;
         sync(&mut bd, &mut super_block)?;
 
-        /* Stage 3: Initialize the root directory's basic information */
+        /* Stage 3: Init the block bitmap */
+        println!("mkpkfs: [INFO] Initialize the block bitmap...");
+
+        // 3.1: Initialize the block bitmap
+        // This bitmap is 0 for all, but except 2 places:
+        //
+        // 1. Super Block (const, 0)
+        // 2. Block bitmap itself (From `total_block - size_of::<BlockBitmap>()` to `total_block`)
+        let mut block_bitmap: Vec<u8> = Vec::new();
+
+        // 3.2: Get the bitmap start block and total block
+        let bitmap_start_block = super_block.bitmap_start_block;
+        let total_block = super_block.total_block;
+
+        for _ in 0..total_block {
+            block_bitmap.push(0);   // Extend vec storage
+        }
+
+        // 3.3: Set the index 0 to 1 (Superblock used)
+        block_bitmap.set(0, true);
+
+        // 3.4: Set each bitmap block's block to 1
+        for i in bitmap_start_block..total_block {
+            block_bitmap.set(i as usize, true);
+        }
+
+        // 3.5: Convert to &mut [u8]
+        let block_bitmap = BlockBitmap::new(&mut block_bitmap);
+
+
+        // 3.6: Write it to the block device
+        bd.write_block(bitmap_start_block, 0, block_bitmap.as_bytes())?;
+
+        /* Stage 4: Initialize the root directory's basic information */
         // In this stage, we will create the root directory's basic information.
         // There are 2 dir entry we MUST define:
         // - "."
@@ -65,11 +102,11 @@ fn main() {
         // These entries are pointed at the same directory: root.
         println!("mkpkfs: [INFO] Initialize the root directory's basic information...");
 
-        // 3.1: Define the name of the "." and ".." entries.
+        // 4.1: Define the name of the "." and ".." entries.
         let name_dot = convert_name(b".");
         let name_parent = convert_name(b"..");
 
-        // 3.2: Define the dir entry of the "." and ".." entries.
+        // 4.2: Define the dir entry of the "." and ".." entries.
         let entry_dot = DirEntry {
             inode: 0,
             name: name_dot,
@@ -79,7 +116,7 @@ fn main() {
             name: name_parent,
         };
 
-        // 3.3: Write the "." and ".." entries to the root directory.
+        // 4.3: Write the "." and ".." entries to the root directory.
         //
         // # Note:
         // - The data block starts at block 1024, which is a constant currently.

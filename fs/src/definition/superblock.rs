@@ -15,11 +15,10 @@ pub struct SuperBlock {
     pub data_start_block: u32,
 
     /// The total block number in the partition.
-    pub total_block_num: u32,
+    pub total_block: u32,
 }
 
 impl crate::GenericFsData for SuperBlock {
-
     fn as_bytes(&self) -> &[u8] {
         unsafe {
             core::slice::from_raw_parts(
@@ -29,7 +28,6 @@ impl crate::GenericFsData for SuperBlock {
         }
     }
 
-
     fn as_mut_bytes(&mut self) -> &mut [u8] {
         unsafe {
             core::slice::from_raw_parts_mut(
@@ -38,7 +36,6 @@ impl crate::GenericFsData for SuperBlock {
             )
         }
     }
-
 
     fn from_bytes(buf: &[u8]) -> Option<&Self> {
         if buf.len() < core::mem::size_of::<Self>() {
@@ -72,12 +69,13 @@ impl SuperBlock {
     pub fn new(partition_size: u64) -> Self {
         let total_block_num: usize = partition_size as usize / 1024;
         let data_start_block = total_block_num as u32 / 1024 + 65536;
+        let bitmap_size = total_block_num as usize / 1024; // 1 bit per block, so 1 byte can represent 8 blocks, so 1024 bytes can represent 8192 blocks
         Self {
             magic: 0x504B4653,
             block_size: 1024,
-            bitmap_start_block: 1,
+            bitmap_start_block: (total_block_num - bitmap_size) as u32,
             data_start_block,
-            total_block_num: total_block_num as u32,
+            total_block: total_block_num as u32,
         }
     }
 }

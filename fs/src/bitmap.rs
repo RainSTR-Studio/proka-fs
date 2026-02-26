@@ -1,5 +1,7 @@
 //! The bitmap which describes is the block bitmap and inode bitmap used.
 
+use crate::GenericFsData;
+
 pub trait Bitmap {
     /// Set up a bit's status
     ///
@@ -42,7 +44,8 @@ pub trait Bitmap {
     fn clear(&mut self);
 }
 
-impl<const N: usize> Bitmap for &mut [u8; N] {
+// Implement this trait for all &mut [u8; N]
+impl Bitmap for &mut [u8] {
     fn set(&mut self, index: usize, used: bool) {
         self[index] = if used { 1 } else { 0 };
     }
@@ -72,10 +75,44 @@ impl<const N: usize> Bitmap for &mut [u8; N] {
     }
 }
 
-// The block bitmap.
-pub struct BlockBitmap<const N: usize>(&'static mut [u8; N]);
+impl Bitmap for Vec<u8> {
+    fn set(&mut self, index: usize, used: bool) {
+        self[index] = if used { 1 } else { 0 };
+    }
 
-impl<const N: usize> Bitmap for BlockBitmap<N> {
+    fn is_used(&self, index: usize) -> bool {
+        self[index] != 0
+    }
+
+    fn alloc(&mut self, max: usize) -> Option<usize> {
+        for i in 0..max {
+            if !self.is_used(i) {
+                self[i] = 1;
+                return Some(i);
+            }
+        }
+        None
+    }
+
+    fn free(&mut self, index: usize) {
+        self[index] = 0;
+    }
+
+    fn clear(&mut self) {
+        for i in 0..self.len() {
+            self[i] = 0;
+        }
+    }
+}
+
+/* ==========<Block Bitmap Definition>========== */
+
+/// The block bitmap.
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct BlockBitmap<'a>(&'a mut [u8]);
+
+// Let the [`BlockBitmap`] implement the [`Bitmap`] trait, so that it can use the bitmap methods.
+impl Bitmap for BlockBitmap<'_> {
     fn set(&mut self, index: usize, used: bool) {
         self.0.set(index, used);
     }
@@ -97,19 +134,9 @@ impl<const N: usize> Bitmap for BlockBitmap<N> {
     }
 }
 
-impl<const N: usize> BlockBitmap<N> {
-    pub fn from_slice(slice: &'static mut [u8]) -> Result<Self, &'static str> {
-        unsafe {
-            if slice.len() != N {
-                return Err("The slice length is not equal to the block bitmap size.");
-            }
-            let array = &mut *slice.as_mut_ptr().cast::<[u8; N]>();
-            Ok(Self(array))
-        }
-    }
-}
-
-impl<const N: usize> crate::GenericFsData for BlockBitmap<N> {
+// This struct will written into the disk as well, so it's a generic fs type.
+// That's why it implements the GenericFsData trait.
+impl GenericFsData for BlockBitmap<'_> {
     fn as_bytes(&self) -> &[u8] {
         self.0
     }
@@ -119,22 +146,22 @@ impl<const N: usize> crate::GenericFsData for BlockBitmap<N> {
     }
 
     fn from_bytes(bytes: &[u8]) -> Option<&Self>
-        where
-            Self: Sized {
-        if bytes.len() != N {
-            return None;
-        }
-        let bitmap = unsafe { &*(bytes[0] as *const u8 as *const Self) };
-        Some(bitmap)
+    where
+        Self: Sized,
+    {
+        Some(unsafe { &*(bytes.as_ptr() as *const Self) })
     }
 
     fn from_mut_bytes(bytes: &mut [u8]) -> Option<&mut Self>
-        where
-            Self: Sized {
-        if bytes.len() != N {
-            return None;
-        }
-        let bitmap = unsafe { &mut *(bytes[0] as *mut u8 as *mut Self) };
-        Some(bitmap)
+    where
+        Self: Sized,
+    {
+        Some(unsafe { &mut *(bytes.as_mut_ptr() as *mut Self) })
+    }
+}
+
+impl<'a> BlockBitmap<'a> {
+    pub fn new(bytes: &'a mut [u8]) -> Self {
+        Self(bytes)
     }
 }

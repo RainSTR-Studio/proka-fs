@@ -38,8 +38,9 @@ impl crate::GenericFsData for DirEntry {
     }
 
     fn from_bytes(bytes: &[u8]) -> Option<&Self>
-        where
-            Self: Sized {
+    where
+        Self: Sized,
+    {
         if bytes.len() < core::mem::size_of::<Self>() {
             return None;
         }

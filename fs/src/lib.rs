@@ -6,7 +6,7 @@ pub mod definition;
 
 pub use bitmap::Bitmap;
 
-use crate::{bitmap::BlockBitmap, definition::Inode};
+use crate::definition::Inode;
 use alloc::vec::Vec;
 
 #[cfg(feature = "std")]
@@ -111,14 +111,14 @@ pub trait GenericFsData {
     where
         Self: Sized;
 
-    /// Get the super block as a byte slice.
+    /// Get the object as a byte slice.
     ///
     /// # Returns
     ///
-    /// * `&[u8]` - The super block as a byte slice.
+    /// * `&[u8]` - The object as a byte slice.
     fn as_bytes(&self) -> &[u8];
 
-    /// Create this inode object by a mutable slice.
+    /// Create this object by a mutable slice.
     ///
     /// # Parameters
     ///
@@ -135,7 +135,7 @@ pub trait GenericFsData {
     ///
     /// # Returns
     ///
-    /// * `&mut [u8]` - The super block as a mutable byte slice.
+    /// * `&mut [u8]` - The object as a mutable byte slice.
     fn as_mut_bytes(&mut self) -> &mut [u8];
 }
 
@@ -194,9 +194,9 @@ impl<B: BlockDevice> FileSystem<B> {
     ///
     /// ```no_run
     /// use proka_fs:FileSystem;
-    /// 
+    ///
     /// let bd = init_block_device("test.img").unwrap();
-    /// 
+    ///
     /// let fs = FileSystem::mount(bd);
     /// let max_inode = fs.get_max_inode();
     /// let max_inode_id = max_inode - 1;
@@ -207,7 +207,7 @@ impl<B: BlockDevice> FileSystem<B> {
     }
 
     /// Allocate an inode.
-    /// 
+    ///
     /// # Parameters
     ///
     /// * `block_num` - The block number to store the inode.
@@ -309,7 +309,11 @@ impl<B: BlockDevice> FileSystem<B> {
     pub fn mkfile(&mut self, parent_inode_id: u32, name: &str) -> Result<(), &'static str> {
         /* Stage 1: Allocate an inode. */
         // 1.1: Allocate an inode.
-        let inode = self.alloc_inode(self.super_block.total_block_num, definition::FileType::Regular, self.get_max_inode())?;
+        let inode = self.alloc_inode(
+            self.super_block.total_block,
+            definition::FileType::Regular,
+            self.get_max_inode(),
+        )?;
 
         // 1.2: Write the inode to the block device.
         let (block_idx, offset) = Inode::locate(inode.inode_id, &self.super_block);
@@ -325,7 +329,11 @@ impl<B: BlockDevice> FileSystem<B> {
     /// Create a directory.
     pub fn mkdir(&mut self, parent_inode_id: u32, name: &str) -> Result<(), &'static str> {
         // 1. Allocate an inode.
-        let inode = self.alloc_inode(self.data_start_block, definition::FileType::Directory, self.get_max_inode())?;
+        let inode = self.alloc_inode(
+            self.data_start_block,
+            definition::FileType::Directory,
+            self.get_max_inode(),
+        )?;
 
         // 2. Write the inode to the block device.
         let (block_idx, offset) = Inode::locate(inode.inode_id, &self.super_block);
@@ -349,8 +357,11 @@ impl<B: BlockDevice> FileSystem<B> {
 
         // 3.3 Write the '.' and '..' entry to the block device.
         let (block_idx, offset) = Inode::locate(inode.inode_id, &self.super_block);
-        self.block_device
-            .write_block(block_idx as u32, offset as u32, &dot_dir_entry.as_bytes())?;
+        self.block_device.write_block(
+            block_idx as u32,
+            offset as u32,
+            &dot_dir_entry.as_bytes(),
+        )?;
         self.block_device.write_block(
             block_idx as u32,
             (offset + core::mem::size_of::<definition::DirEntry>()) as u32,
