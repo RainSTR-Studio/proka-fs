@@ -1,6 +1,6 @@
 //! The bitmap which describes is the block bitmap and inode bitmap used.
 
-use crate::GenericFsData;
+use crate::{GenericFsData, Vec};
 
 pub trait Bitmap {
     /// Set up a bit's status
