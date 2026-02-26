@@ -6,6 +6,8 @@
 
 ---
 
+For more documentations, please click [here](docs/README.md).
+
 Welcome to use ProkaFS, which is prepared for ProkaOS. 
 Primarily for practice, and we hope this can be supported in more operating systems.
 
